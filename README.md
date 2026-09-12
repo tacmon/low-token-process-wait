@@ -1,5 +1,7 @@
 # low-token-process-wait
 
+**English** | [简体中文](README.zh-CN.md)
+
 A Codex skill for finite jobs that take more than a few minutes. It delegates exact-PID waiting to one clean-context subagent so a large main conversation does not repeatedly probe the process.
 
 The skill does not change Codex host scheduling or promise infinite synchronous blocking. It makes the waiting contract explicit:
