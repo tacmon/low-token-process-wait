@@ -2,6 +2,12 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+## Motivation
+
+This project tries to solve the last mile of long-running work in Codex. A command such as `train.sh` may run for hours while the main conversation is in goal mode and the user wants the task to remain active. Without an explicit waiting workflow, the main conversation may repeatedly probe the process and waste tokens against a large context.
+
+The approach is to delegate exact-process monitoring to one economical, clean-context subagent with a terse detector script. This gives the main conversation a practical foreground-waiting behavior while keeping monitoring relatively economical. It does not change Codex's host scheduler or guarantee infinite synchronous execution.
+
 A Codex skill for finite jobs that take more than a few minutes. It delegates exact-PID waiting to one clean-context subagent so a large main conversation does not repeatedly probe the process.
 
 The skill does not change Codex host scheduling or promise infinite synchronous blocking. It makes the waiting contract explicit:
