@@ -21,7 +21,7 @@ Try the normal foreground execution once. If the tool yields while the job remai
    python3 ~/.codex/skills/low-token-process-wait/scripts/wait_pid.py --pid PID --interval 60
    ```
 
-   It prints the current time and `执行中` every minute, then `执行完毕` on process exit. Linux pidfd waits on the specific process; older Python versions use local `/proc` checks with process start time and zombie detection. The fallback detects exit within one interval. It does not terminate the target. An absent PID at attachment is reported distinctly; it is not evidence of successful training.
+   It prints the current time and `执行中` every minute, then `执行完毕` on process exit. Linux pidfd waits on the specific process; older Python versions use local `/proc` checks with process start time and zombie detection. The fallback detects exit within one interval. It does not terminate the target. An absent PID at attachment is reported distinctly; it is not evidence of successful training. The minute heartbeat is produced by the process, not by model turns.
 4. Before launching a long job, validate the launcher itself. If it promises to persist the child's exit code or write a completion record, run a short smoke test and confirm that record is actually created and contains the child's exit code. A launcher-recording failure is a test/workflow failure even when the child job succeeds.
 
 ## Delegate monitoring
@@ -39,7 +39,11 @@ If the command yields, retain its session ID and wait on that same session
 using the longest permitted wait consistent with higher-priority instructions.
 Do not start another detector, run nvidia-smi, or inspect training logs.
 The detector emits a heartbeat every minute; this is not a request to reason
-or report every minute. Keep tool output and reasoning minimal. Do not send
+or report every minute. After each detector output/session continuation, use
+the platform's documented wait operation before inspecting again. Prefer a
+600-second wait window; use 120 seconds when 600 is unavailable, then 60
+seconds only as a fallback. Do not immediately re-run the detector after it
+returns a heartbeat. Keep tool output and reasoning minimal. Do not send
 heartbeat messages to the parent. Wait until the detector exits.
 Return only: PROCESS_EXITED pid=PID, ALREADY_ABSENT pid=PID, or
 MONITOR_ERROR pid=PID reason=SHORT_REASON. Process exit is not job success.
