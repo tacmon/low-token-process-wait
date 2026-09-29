@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 """Prepare a local interactive TUI without changing its execution permissions."""
 import os
+from pathlib import Path
 import shlex
 import shutil
 import sys
@@ -35,7 +36,8 @@ def interactive(args):
 def launch_argv(binary, args, tty):
     if not tty or not interactive(args):
         return [binary, *args]
-    cmd = [binary, '--no-daemon', *args] if '--no-daemon' not in args else [binary, *args]
+    defaults = [flag for flag in ('--no-daemon', '--no-alt-screen') if flag not in args]
+    cmd = [binary, *defaults, *args]
     if os.environ.get('TMUX'):
         return cmd
     if not shutil.which('tmux'):
@@ -43,7 +45,9 @@ def launch_argv(binary, args, tty):
     # One server per launch inherits this invocation's environment, avoiding stale
     # PATH/profile variables from an older server. No credentials are inspected.
     socket = 'codex-wake-' + uuid.uuid4().hex[:12]
-    return ['tmux', '-L', socket, 'new-session', '-s', 'codex', '-c', os.getcwd(), shlex.join(cmd)]
+    config = str(Path(__file__).with_name('codex.tmux.conf'))
+    return ['tmux', '-L', socket, '-f', config, 'new-session', '-s', 'codex',
+            '-c', os.getcwd(), shlex.join(cmd)]
 
 
 def main():

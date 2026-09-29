@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.0
+
+- Read durable Goal identity through read-only SQLite when tool updates omit rollout events; refuse stale log fallback when a database exists.
+- Add five identity regression cases and three launcher tests (23 automated tests total), and document the successful 180-second same-Goal CLI retest.
+- Include dedicated tmux configuration: mouse/clipboard, hidden status, 100000-line history, application Ctrl+B and normal CLI exit behavior.
+- Default optional launch to inline scrollback; document new-session requirements and unverified full Goal flow under that display mode.
+- Record actual Desktop heartbeat execution with Goal still paused, and permit scoped diagnostics without claiming automatic restoration.
+- Correct completion-response ordering claims and retain privacy-safe, portable instructions.
+
 ## v0.2.0
 
 - Prefer official Desktop heartbeat follow-ups attached to the original task.

@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import select
+import sqlite3
 import subprocess
 import sys
 import time
@@ -216,6 +217,27 @@ class TmuxInput:
         return False
 
     def goal_identity(self):
+        # Goal tool updates need not appear in the rollout. Query the durable
+        # identity read-only; all lifecycle changes still go through native TUI.
+        home = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
+        database = home / 'goals_1.sqlite'
+        if database.exists():
+            connection = None
+            try:
+                connection = sqlite3.connect(database.resolve().as_uri() + '?mode=ro',
+                                             uri=True, timeout=5)
+                connection.execute('PRAGMA query_only = ON')
+                row = connection.execute(
+                    'SELECT goal_id, created_at_ms FROM thread_goals WHERE thread_id = ?',
+                    (self.thread,)).fetchone()
+                if not row or not isinstance(row[0], str) or not row[0] or not isinstance(row[1], int):
+                    raise UnsafeTarget('current Goal identity missing or invalid in read-only state')
+                return {'goal_id': row[0], 'created_at_ms': row[1]}
+            except sqlite3.Error as error:
+                raise UnsafeTarget(f'read-only Goal identity unavailable: {error}') from error
+            finally:
+                if connection is not None:
+                    connection.close()
         goals = [r['payload']['goal'] for r in self.rollout_records()
                  if r.get('payload', {}).get('type') == 'thread_goal_updated'
                  and r['payload'].get('threadId') == self.thread
@@ -275,7 +297,9 @@ def worker_locked(path):
             status, objective = ui.goal_summary()
             if status != 'active':
                 raise UnsafeTarget('only an active Goal can opt into temporary suspension')
-            phase('pausing', goal_objective=objective, goal_created_at=ui.goal_identity())
+            identity = ui.goal_identity()
+            created_at = identity['created_at_ms'] // 1000 if isinstance(identity, dict) else identity
+            phase('pausing', goal_objective=objective, goal_identity=identity, goal_created_at=created_at)
             ui.set_goal('paused', objective)
             wait_idle(ui, time.monotonic() + data['delivery_timeout'])
         phase('starting')
@@ -304,7 +328,7 @@ def worker_locked(path):
         ui.verify_thread()
         if data['goal']:
             status, objective = ui.goal_summary()
-            if status != 'paused' or objective != data['goal_objective'] or ui.goal_identity() != data['goal_created_at']:
+            if status != 'paused' or objective != data['goal_objective'] or ui.goal_identity() != data['goal_identity']:
                 raise UnsafeTarget('Goal changed during wait; completion retained without auto-resume')
         log_path = data.get('attach_log') if data.get('attach_pid') else str(path.parent / 'command.log')
         message = (f"Job {data['id']} finished; exit_code={rc if rc is not None else 'unknown'}; "
@@ -322,7 +346,7 @@ def worker_locked(path):
         if data['goal']:
             wait_idle(ui, time.monotonic() + data['delivery_timeout'])
             ui.verify_thread()
-            if ui.goal_identity() != data['goal_created_at']:
+            if ui.goal_identity() != data['goal_identity']:
                 raise UnsafeTarget('original Goal was replaced after completion input')
             ui.set_goal('active', data['goal_objective'])
         phase('delivered', goal_restored=bool(data['goal']))

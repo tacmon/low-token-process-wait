@@ -207,6 +207,65 @@ class InputTests(unittest.TestCase):
         finally:
             subprocess.run(['tmux', '-L', socket, 'kill-server'], check=True)
 
+class GoalIdentityCompatibilityTests(unittest.TestCase):
+    def make_ui(self):
+        ui = object.__new__(wake.TmuxInput)
+        ui.thread = 'isolated-test-thread'
+        return ui
+
+    def make_database(self, directory):
+        import sqlite3
+        path = Path(directory) / 'goals_1.sqlite'
+        with sqlite3.connect(path) as c:
+            c.execute('CREATE TABLE thread_goals (thread_id TEXT PRIMARY KEY, goal_id TEXT, created_at_ms INTEGER)')
+            c.execute('INSERT INTO thread_goals VALUES (?, ?, ?)', ('isolated-test-thread', 'original-goal', 1234567))
+        return path
+
+    def test_durable_identity_without_rollout_event(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = self.make_database(d)
+            before = path.read_bytes()
+            with patch.dict(os.environ, {'CODEX_HOME': d}):
+                ui = self.make_ui()
+                with patch.object(ui, 'rollout_records', side_effect=AssertionError('must not need rollout')):
+                    self.assertEqual(ui.goal_identity(), {'goal_id': 'original-goal', 'created_at_ms': 1234567})
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_replaced_goal_same_creation_time_changes_identity(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as d:
+            path = self.make_database(d)
+            with patch.dict(os.environ, {'CODEX_HOME': d}):
+                ui = self.make_ui()
+                original = ui.goal_identity()
+                with sqlite3.connect(path) as c:
+                    c.execute('UPDATE thread_goals SET goal_id = ?', ('replacement-goal',))
+                self.assertNotEqual(ui.goal_identity(), original)
+
+    def test_missing_current_goal_does_not_accept_stale_rollout(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.make_database(d)
+            with patch.dict(os.environ, {'CODEX_HOME': d}):
+                ui = self.make_ui()
+                ui.thread = 'absent-thread'
+                with patch.object(ui, 'rollout_records', side_effect=AssertionError('stale rollout forbidden')):
+                    with self.assertRaises(wake.UnsafeTarget): ui.goal_identity()
+
+    def test_unknown_database_schema_refuses(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as d:
+            with sqlite3.connect(Path(d) / 'goals_1.sqlite') as c:
+                c.execute('CREATE TABLE unrelated (x TEXT)')
+            with patch.dict(os.environ, {'CODEX_HOME': d}):
+                with self.assertRaises(wake.UnsafeTarget): self.make_ui().goal_identity()
+
+    def test_legacy_rollout_when_database_absent(self):
+        with tempfile.TemporaryDirectory() as d:
+            ui = self.make_ui()
+            records = [{'payload': {'type': 'thread_goal_updated', 'threadId': ui.thread, 'goal': {'createdAt': 1234}}}]
+            with patch.dict(os.environ, {'CODEX_HOME': d}), patch.object(ui, 'rollout_records', return_value=iter(records)):
+                self.assertEqual(ui.goal_identity(), 1234)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
