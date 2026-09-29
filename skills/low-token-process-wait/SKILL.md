@@ -1,74 +1,47 @@
 ---
 name: low-token-process-wait
-description: Reduce main-conversation token waste when running finite programs expected to take over five minutes, such as model training, repeated tests, or dataset generation. When execution yields an unfinished session, delegate monitoring to one clean-context economical subagent and wait for its completion instead of repeatedly checking the process in the main conversation.
+description: 当训练、测试、数据处理等有限程序预计运行数分钟以上，或少数检查后仍未结束时，优先在 Desktop 创建返回原任务的官方定时检查，结束本轮并在完成后继续；CLI 使用进程退出唤醒。
 ---
 
-# Low-token process waiting
+# 长程序等待与原任务定时继续
 
-## Trigger and intent
+本配置偏好自动安排官方定时跟进。Goal 暂停/恢复需要用户授权；已有明确授权时不重复询问。用于有限的非交互任务；不用于常驻服务器、需要输入的程序或等待审批的操作。
 
-Apply automatically for finite computational jobs estimated to take at least five minutes, or when a job unexpectedly becomes long-running. The user wants unattended continuation with minimal repeated input from the large main conversation. Do not apply to permanent servers or interactive programs awaiting input.
+## 首选：Desktop 官方定时任务
 
-Try the normal foreground execution once. If the tool yields while the job remains active, use this workflow instead of repeated main-agent status probes. If the job is already running, attach to it; never restart it to simplify monitoring.
+用户最新偏好是官方定时任务。遇到长程序等待时主动安排，不依赖用户每次说“设个定时任务”。这一偏好允许本等待流程采用官方调度返回原任务；CLI 路径仍仅通过交互式输入框。禁止用非交互 Codex 命令、SDK 或自建模型客户端替代。
 
-## Prepare once
+1. 确认工作程序能够在本轮结束后继续运行，记录真实 PID（含创建时间或稳定任务标识）、主机、项目、日志、结果/退出状态文件和完成后的下一步；已经运行的任务不得重跑，工具会话句柄不是 PID。
+2. 查找当前暴露的 automation_update 工具，按实际 schema 使用 kind=heartbeat、绑定当前任务。优先更新同一工作已有的自动任务；若需要查找已有记录，在 CODEX_HOME/automations/*/automation.toml 中匹配任务标识，不重复创建。不要写原始调度配置文件，不以独立 cron/新任务替代原任务心跳。
+3. 按预计剩余时间选择周期：数小时任务通常每30分钟，较短任务可每5–10分钟；未知时默认30分钟。用户已经偏好该方式，不重复征求一般性确认。宿主要求审批时遵循实际审批流程，不假称已创建。
+4. 自动任务提示词必须包含真实监视对象、读取退出记录的方法和后续动作。每次只检查一次；未结束则停止本次回答，等下一次调度，不在这一轮继续循环等待。没有变化或不可行动时不发送进度汇报；完成、失败或需用户行动时才通知。用户明确要求定期汇报时遵循其要求。进程消失不能当作成功，须核验退出记录和输出；无法取得退出码时说明 unknown。完成后继续原任务，并暂停或删除这次等待专用自动任务，记录并使用创建返回的真实 automation id。
+5. 工具返回创建成功及任务标识后结束当前回答，告知已安排、检查间隔和续跑原任务。不要同时开启 CLI 监督器、子 agent 监视或前台轮询。创建失败时报告原因，不能声称定时唤醒已生效。
+6. Goal 与定时任务是独立生命周期。不能假定结束回答会让 active Goal 停止自动续跑，也不能假定定时消息会把 paused Goal 改为 active。只有当前宿主具备可验证的原 Goal 暂停与恢复路径时才进行自动联动；即使用户允许临时暂停，也不能凭授权创造缺失的恢复工具。若不具备该路径，明确说明 Goal 联动尚未验证，不能承诺停等和自动恢复，不能把 Goal 标记 complete/blocked 来模拟等待。
 
-1. Identify the actual job PID, host, and PID namespace, plus the execution session ID and result/log paths. Prefer the launcher that waits for all workers for distributed jobs. A GPU worker exiting is not necessarily completion of the whole job.
-2. Verify the exact PID and command once. Do not use a broad Python executable pattern or GPU power as the completion condition. If only a pattern is known, resolve it once to the intended PID; resolve ambiguous matches before waiting.
-3. Use the bundled Linux detector, or adapt a detector on the execution host if necessary:
+官方调度会定期运行模型，不保证零 token 或进程退出立即唤醒。本地任务要求电脑和 Desktop app 持续运行。已有人在真实 Desktop 工作中成功创建30分钟定时跟进；完整自动收尾和 Desktop Goal 联动仍未验证，不能扩大证据范围。
+
+## CLI 自动路径
+
+1. 预计运行数分钟以上，启动前就包装；少数几次检查后仍未结束，取得真实操作系统 PID 并接管，不能重跑原命令。工具 session_id 不是 PID。远程 PID 不能在本机监视。
+2. 确认当前是本机 Linux 交互式 CLI，环境有 TMUX、TMUX_PANE、CODEX_THREAD_ID；缺失时报告限制，不猜目标，不操作别的会话。可按 references/operation.md 安装可选 zsh 启动入口；不能假定安装 skill 就已经修改用户 shell。
+3. 使用以下已安装脚本，定位参数默认读取上述环境，结果放在当前项目允许写入的目录：
 
    ```bash
-   python3 ~/.codex/skills/low-token-process-wait/scripts/wait_pid.py --pid PID --interval 60
+   /usr/bin/python3 "${CODEX_HOME:-$HOME/.codex}/skills/low-token-process-wait/scripts/wake.py" start --state-dir "$PWD/.codex-wake-jobs" -- 原命令 参数
    ```
 
-   It prints the current time and `执行中` every minute, then `执行完毕` on process exit. Linux pidfd waits on the specific process; older Python versions use local `/proc` checks with process start time and zombie detection. The fallback detects exit within one interval. It does not terminate the target. An absent PID at attachment is reported distinctly; it is not evidence of successful training. The minute heartbeat is produced by the process, not by model turns.
-4. Before launching a long job, validate the launcher itself. If it promises to persist the child's exit code or write a completion record, run a short smoke test and confirm that record is actually created and contains the child's exit code. A launcher-recording failure is a test/workflow failure even when the child job succeeds.
+   当前有 active Goal 且已获临时暂停/恢复授权时，在 -- 前加 --goal。已运行任务用 --attach-pid 实际PID --attach-log 实际日志绝对路径 替代 -- 原命令 参数；没有日志则省略 --attach-log。不得传入示例 PID。
+4. 返回监督 PID 和结果路径后立即结束本轮，告知已交给本地监督程序以及结果位置。不要等待、反复查状态、启用子 agent 监视或创建定时模型检查。不要标记 Goal complete/blocked 来模拟等待。监督程序会通过同一 CLI 输入框暂停 Goal，等回答结束后运行任务。
+5. 收到 Job wake-... finished 消息后，读取对应结果和日志，继续原工作。这只是进程结束通知；接管非子进程退出码为 unknown，不能编造成功。若结果 goal=true 且 Goal 暂停，监督程序将在本次回答结束后恢复原 Goal；此轮处理结果后结束回答，不手动清除、替换或恢复 Goal，不改变目标创建时间；后续依赖 Goal 续跑的步骤留给恢复后的下一轮。
 
-## Delegate monitoring
+上述 CLI 方案的所有模型交互只走原交互式 CLI 输入框和 Enter。不得用 codex exec、queue、SDK、app-server 客户端、模型 HTTP 调用或其他模型替代。等待期间由本地脚本等进程退出，不运行模型。
 
-Spawn exactly one subagent with `fork_turns="none"`. Explicitly choose the cheapest suitable model from the actual exposed model options when pricing is known. Otherwise default to `gpt-5.6-luna` with `reasoning_effort="low"` when available, as an economical candidate, not a verified price minimum. Do not research pricing on every wait. If unavailable, use a known economical available model; do not silently select an expensive model. If no suitable model or delegation exists, explain the limitation briefly instead of reverting to repeated main-agent probes.
+## 失败与边界
 
-Pass only this compact assignment, replacing placeholders with concrete values:
+- 沙箱隐藏宿主 PID 或禁止访问 tmux 时注册失败。不得自动提升权限、绕过沙箱或重新运行已经启动的任务；报告具体原因。用户原来明确选用 full-access 时按该权限执行，skill 不改变权限设置。
+- attention 保留结果且不自动重复投递。先核实原会话是否已经收到消息，再处理恢复；不能盲目重跑。
+- 默认英文 CLI 布局已实测。窄窗口、草稿、复制模式、其他布局、会话或 Goal 被用户改变时可能拒绝投递。主机必须运行、CLI 面板必须保留。进程消失不等于成功。
+- Desktop 输入框自动控制未实现；Desktop 应优先使用上述官方定时任务，而非 CLI tmux 监督器。当前宿主缺少定时工具时明确报告，不假装已安排。
+- 无法自动唤醒时，非 Goal 可用已有 scripts/wait_pid.py 给出填好真实 PID 的完整终端命令，请用户结束后通知；有 active Goal 时说明限制，征求是否暂停等待人工通知，不能退回无限自动检查。
 
-```text
-Your only task is waiting for a process to exit. Do not load project history,
-read skills, analyze training, modify files, restart/kill jobs, or spawn agents.
-Host/namespace: HOST. Exact PID: PID. Command identity: COMMAND.
-Run: python3 ABSOLUTE_DETECTOR_PATH --pid PID --interval 60
-If the command yields, retain its session ID and wait on that same session
-using the longest permitted wait consistent with higher-priority instructions.
-Do not start another detector, run nvidia-smi, or inspect training logs.
-The detector emits a heartbeat every minute; this is not a request to reason
-or report every minute. After each detector output/session continuation, use
-the platform's documented wait operation before inspecting again. Prefer a
-600-second wait window; use 120 seconds when 600 is unavailable, then 60
-seconds only as a fallback. Do not immediately re-run the detector after it
-returns a heartbeat. Keep tool output and reasoning minimal. Do not send
-heartbeat messages to the parent. Wait until the detector exits.
-Return only: PROCESS_EXITED pid=PID, ALREADY_ABSENT pid=PID, or
-MONITOR_ERROR pid=PID reason=SHORT_REASON. Process exit is not job success.
-```
-
-The detector must run on the target host; local PID checks cannot monitor a remote process. Do not assume the child can access a parent's tool session. It can independently run the detector when it shares the host and namespace.
-
-The following explicit instruction is intentional and should be included when the host is prone to resuming main-agent reasoning after delegation: "After starting the subagent, stop thinking and doing work in the main session. Wait for the subagent's explicit final report that the process has ended; only then continue." This is a behavioral prompt reinforcement, not a claim that it changes host-level scheduler limits.
-
-## Main-agent standby
-
-Once the subagent is spawned, enter `WAITING_FOR_SUBAGENT` state. In that state the only permitted operational action is the documented subagent wait call; do not choose a generic process/session wait API by name similarity. Keep the subagent identity and its wait cursor/target unchanged until it returns. Leave this state only when the subagent returns, the user interrupts, or a higher-priority system event requires action.
-
-Send or retain this explicit standby contract in the main turn: **"Subagent has started. Main session: stop thinking, stop probing, and stop all other work. Remain waiting until the subagent explicitly reports PROCESS_EXITED, ALREADY_ABSENT, or MONITOR_ERROR. Do not continue before that report."** Do not interpret a tool-window timeout as permission to resume analysis; it only permits renewing the same subagent wait.
-
-Immediately wait for the child with `wait_agent` (or the platform's explicitly documented subagent-wait equivalent). Use the longest permitted wait consistent with higher-priority instructions. If it returns a timeout, call the same subagent-wait tool again with the same target; describe this only as a "subagent wait-window timeout". It does not indicate process completion or failure. Do not use `functions.wait` for a subagent: that interface is only for a real still-running `functions.exec` cell and requires its non-empty `cell_id`. Never invent, omit, or leave `cell_id` empty. On timeout with no result, only renew the same subagent wait with minimal reasoning. Do not run process/GPU/log checks, request repeated child status, create timers, perform unrelated work, or spawn another watcher. Do not turn detector heartbeats into user-facing updates unless higher-priority instructions require them.
-
-Maintain a minimal wait event record in the main turn: wait started, each wait-window timeout, any tool/interface error (including rejected calls), and the child's final result. Do not probe the target to explain a timeout. If a wrong wait interface was attempted, disclose it in the final report even when it had no effect on the job.
-
-If a goal is active, leave it active and pending; monitoring is not goal completion. New user instructions can interrupt waiting. Stopping the monitor alone does not authorize killing training.
-
-On the child result, consume the original execution session's final status once if available, and inspect final logs/results to determine success or failure. Continue the original task/goal. An exited or missing PID does not establish a successful exit code. If the detector fails, diagnose that specific error; do not silently resume main-agent polling.
-
-## Honest limits
-
-This skill reduces expensive main-context checks; it does not override host scheduling, tool deadlines, context inherited outside conversation history, or higher-priority progress instructions. Wait timeouts can still cause model turns in both agents. Do not promise zero tokens, indefinite synchronous blocking, a precise saving percentage, or automatic resumption after the host ends the turn. A child context also grows with repeated tool calls; keep its output terse. Do not duplicate watchers to work around lifecycle limits.
-
-Success of the process and success of the waiting workflow are separate claims. The final report must distinguish the job's exit/result from monitor delivery, main-agent standby behavior, timeout renewals, and any rejected or misrouted tool calls. If usage data is unavailable, record it as unmeasured; do not infer savings from wait counts.
+启动环境、权限和卸载方法参见 [references/operation.md](references/operation.md)，需要时读取。
