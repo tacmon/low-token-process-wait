@@ -1,0 +1,3 @@
+# Five-minute Desktop test
+
+Use $low-token-process-wait in this current Desktop task. Run a finite 300-second background job with durable logs, a stable run id, output and actual exit status. Create an official heartbeat returning to this same task every minute, then end the answer. On each scheduled run, check once and record the observation; stay quiet while it runs normally. After completion, verify elapsed time, exit status and output, generate a result summary, then retire the heartbeat. Stop and report failure after ten minutes without a valid result. Do not create a Goal, new chat, monitoring subagent or CLI supervisor. Keep current permissions. Do not claim that the test proves paused Goal restoration.

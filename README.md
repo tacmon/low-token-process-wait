@@ -43,7 +43,7 @@ See [operation and optional launcher setup](skills/low-token-process-wait/refere
 ## Evidence and limits
 
 - CLI: 20 automated supervisor tests plus 3 launcher tests; a 65-second live run recorded zero model turn starts during execution and one completion input, preserving the original Goal. A separate live run verified a job launched by the agent itself.
-- Desktop: the user reported successful activation in real work; the supplied UI showed a same-task 30-minute schedule. A separate real heartbeat callback entered a paused-Goal task and left the Goal paused. These establish scheduling/callback execution, not automatic Goal activation or full workflow cleanup.
+- Desktop Linux: a 90-second background job survived the end of the answer; a 2-minute heartbeat returned to the same task, verified the output and retired itself. A separate callback entered a paused-Goal task and left it paused. Goal activation is not verified. See [evidence and a five-minute demonstration](skills/low-token-process-wait/references/desktop-validation.md).
 - No automatic recovery across host/supervisor crashes. Ambiguous submissions are not blindly retried. Drafts, changed task/Goal identities, and unrecognized UI layouts can prevent delivery.
 
 Run automated tests without model calls:
@@ -57,3 +57,7 @@ Try [the 12-minute Desktop experiment](prompts/12-minute-test.md) to verify sche
 ## v0.3.0 update
 
 Read-only durable Goal identity fixes missing rollout events. A 180-second live CLI run verified one completion input and restoration of the same Goal through to completion. Optional WezTerm/zsh setup now includes mouse/clipboard support, hidden status, 100000-line history and inline CLI mode. See the operation guide for behavior and remaining verification limits.
+
+## v0.4.0 update
+
+Document the verified Desktop Linux background-wait and same-task heartbeat workflow, distinguish it from CLI Goal restoration, and add a five-minute demonstration procedure. Explain sandbox process-lifetime and PID-namespace limits. CLI scripts are unchanged.
