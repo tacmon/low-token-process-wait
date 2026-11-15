@@ -1,5 +1,7 @@
 # Desktop validation and demonstration
 
+These fixed-interval results do not validate the v0.6.0 ETA-first strategy or its 30/60/120/300/600/1800-second fallback. Follow current host permissions and SKILL.md; fixed-interval demonstrations below are explicit diagnostics, not the production default.
+
 ## Verified on 2026-10-07
 
 Codex Desktop Linux 26.917.71314, build 10954, prod; ordinary task with no Goal.

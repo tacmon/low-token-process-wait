@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-A Codex skill for finite jobs that run for minutes or hours. **Desktop prefers official scheduled follow-ups in the same task.** Linux interactive CLI can use a local process-exit supervisor that submits a completion message through the original input box.
+A Codex skill for finite jobs that run for minutes or hours. **Choose the next check from a credible remaining-time estimate, capped at 30 minutes; otherwise use progressive backoff.** Desktop scheduling is used only when the current host permits it. Linux interactive CLI can use a local process-exit supervisor that submits a completion message through the original input box.
 
 This version replaces the previous subagent-monitoring workflow. No monitoring subagent is required.
 
@@ -17,9 +17,10 @@ Installation does not automatically change your shell, permissions, providers, o
 When a finite job will take several minutes, Codex should:
 
 1. Make sure the job survives the end of the current answer; record its identity, host, logs, and exit/result records.
-2. Use the available official automation tool to create or update a **heartbeat attached to the current task**. Typically check every 30 minutes for multi-hour work, or every 5–10 minutes for shorter work.
-3. End the current answer after creation is confirmed.
-4. Check once per scheduled run. Remain quiet when nothing needs attention. Verify completion, continue the original work, then pause/delete the waiting automation.
+2. Estimate the whole job’s remaining time from reliable progress: wait that duration up to 30 minutes, or 30 minutes if longer. With no credible estimate, use successive waits of **30 seconds, 1, 2, 5, 10, 30 minutes**, then 30 minutes repeatedly. A 7-minute estimate means 7 minutes, not a forced backoff bucket.
+3. For waits up to 30 seconds, stay in the current session. For longer waits, use an official **heartbeat attached to the current task** only if the host permits this purpose. Re-estimate on each check and update the same automation’s actual schedule, retaining its identity and notification preferences.
+4. End the current answer after scheduling is confirmed.
+5. Check once per scheduled run. Remain quiet when nothing needs attention. Verify completion, continue the original work, then pause/delete the waiting automation.
 
 Keep the computer and Desktop app running. Scheduled checks run the model and can be delayed; they do not promise zero tokens or immediate process-exit detection. Available tooling depends on the host. See [official scheduled-task documentation](https://learn.chatgpt.com/docs/automations).
 
@@ -61,3 +62,7 @@ Read-only durable Goal identity fixes missing rollout events. A 180-second live 
 ## v0.4.0 update
 
 Document the verified Desktop Linux background-wait and same-task heartbeat workflow, distinguish it from CLI Goal restoration, and add a five-minute demonstration procedure. Explain sandbox process-lifetime and PID-namespace limits. CLI scripts are unchanged.
+
+## v0.6.0 update
+
+Prioritize ETA over fixed polling, cap each wait at 30 minutes, and add the 10-minute unknown-time backoff stage. Persist decisions and confirm actual schedule updates rather than only editing prompts. Respect host restrictions and retain CLI exit-event supervision. The adaptive scheduling sequence has not yet completed a live end-to-end timing test.

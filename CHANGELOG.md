@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.0
+
+- Prefer credible remaining-time estimates, capped at 30 minutes, over fixed polling.
+- Fall back to 30 seconds, 1/2/5/10/30 minutes, then repeat 30 minutes when ETA is unknown.
+- Re-estimate each check, persist waiting state and verify actual schedule updates.
+- Respect current host scheduling restrictions; retain CLI process-exit supervision.
+- Refresh English/Chinese documentation; adaptive live timing remains unverified.
+
 ## v0.3.0
 
 - Read durable Goal identity through read-only SQLite when tool updates omit rollout events; refuse stale log fallback when a database exists.
