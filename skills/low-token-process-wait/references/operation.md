@@ -1,6 +1,6 @@
-## Waiting policy in v0.6.0
+## Waiting policy in v0.6.1
 
-Use a credible remaining-time estimate, capped at 30 minutes. Without an estimate, check after 30 seconds, then 1, 2, 5, 10 and 30 minutes, continuing at 30 minutes. Re-estimate at every check and confirm that the actual schedule matches the decision. Short waits stay in the current session; longer waits use same-task scheduling only when the current host permits it. CLI exit-event supervision is unchanged. See SKILL.md for state persistence and failure handling. This adaptive timing has not completed an end-to-end live scheduling test.
+Use a credible remaining-time estimate without a 30-minute cap. Check at estimated completion; if unfinished, re-estimate. Do not add intermediate 30-minute checks when ETA is credible. Without an estimate, check after 30 seconds, then 1, 2, 5, 10 and 30 minutes, continuing at 30 minutes. Re-estimate at every check and confirm that the actual schedule matches the decision. Short waits stay in the current session; longer waits use same-task scheduling only when the current host permits it. CLI exit-event supervision is unchanged. See SKILL.md for state persistence and failure handling. This adaptive timing has not completed an end-to-end live scheduling test.
 
 # Operation and optional CLI launcher
 

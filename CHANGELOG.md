@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1
+
+- Remove the 30-minute cap for credible ETA; check at estimated completion and re-estimate if unfinished.
+- Keep 30-minute recurring checks only for unknown-time backoff.
+- Preserve early CLI exit wakeups and document delayed failure detection for scheduled waits.
+- Synchronize bilingual documentation; long-duration adaptive scheduling remains unverified.
+
 ## v0.6.0
 
 - Prefer credible remaining-time estimates, capped at 30 minutes, over fixed polling.

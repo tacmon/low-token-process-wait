@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-A Codex skill for finite jobs that run for minutes or hours. **Choose the next check from a credible remaining-time estimate, capped at 30 minutes; otherwise use progressive backoff.** Desktop scheduling is used only when the current host permits it. Linux interactive CLI can use a local process-exit supervisor that submits a completion message through the original input box.
+A Codex skill for finite jobs that run for minutes or hours. **Choose the next check from a credible remaining-time estimate, without a 30-minute cap; otherwise use progressive backoff.** Desktop scheduling is used only when the current host permits it. Linux interactive CLI can use a local process-exit supervisor that submits a completion message through the original input box.
 
 This version replaces the previous subagent-monitoring workflow. No monitoring subagent is required.
 
@@ -17,7 +17,7 @@ Installation does not automatically change your shell, permissions, providers, o
 When a finite job will take several minutes, Codex should:
 
 1. Make sure the job survives the end of the current answer; record its identity, host, logs, and exit/result records.
-2. Estimate the whole job’s remaining time from reliable progress: wait that duration up to 30 minutes, or 30 minutes if longer. With no credible estimate, use successive waits of **30 seconds, 1, 2, 5, 10, 30 minutes**, then 30 minutes repeatedly. A 7-minute estimate means 7 minutes, not a forced backoff bucket.
+2. Estimate the whole job’s remaining time from reliable progress: wait until estimated completion, even when more than 30 minutes away. With no credible estimate, use successive waits of **30 seconds, 1, 2, 5, 10, 30 minutes**, then 30 minutes repeatedly. A 7-minute estimate means 7 minutes, not a forced backoff bucket.
 3. For waits up to 30 seconds, stay in the current session. For longer waits, use an official **heartbeat attached to the current task** only if the host permits this purpose. Re-estimate on each check and update the same automation’s actual schedule, retaining its identity and notification preferences.
 4. End the current answer after scheduling is confirmed.
 5. Check once per scheduled run. Remain quiet when nothing needs attention. Verify completion, continue the original work, then pause/delete the waiting automation.
@@ -63,6 +63,6 @@ Read-only durable Goal identity fixes missing rollout events. A 180-second live 
 
 Document the verified Desktop Linux background-wait and same-task heartbeat workflow, distinguish it from CLI Goal restoration, and add a five-minute demonstration procedure. Explain sandbox process-lifetime and PID-namespace limits. CLI scripts are unchanged.
 
-## v0.6.0 update
+## v0.6.1 update
 
-Prioritize ETA over fixed polling, cap each wait at 30 minutes, and add the 10-minute unknown-time backoff stage. Persist decisions and confirm actual schedule updates rather than only editing prompts. Respect host restrictions and retain CLI exit-event supervision. The adaptive scheduling sequence has not yet completed a live end-to-end timing test.
+Wait until credible estimated completion without a 30-minute cap or early check. If unfinished, re-estimate. Only unknown-time backoff eventually repeats every 30 minutes. Early completion or failure may be discovered at the estimated check; existing CLI exit-event wakeups remain immediate. Persist decisions and confirm actual schedule updates rather than only editing prompts. Respect host restrictions and retain CLI exit-event supervision. The adaptive scheduling sequence has not yet completed a live end-to-end timing test.
